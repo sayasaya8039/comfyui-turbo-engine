@@ -19,6 +19,7 @@ pub struct WsQuery {
 ///
 /// Accepts an optional `?clientId=<uuid>` query parameter.
 /// Sends an initial status message with the current queue remaining count.
+/// Forwards progress broadcast messages to the client in real time.
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
     Query(query): Query<WsQuery>,
@@ -51,20 +52,32 @@ async fn handle_socket(mut socket: WebSocket, client_id: String, state: AppState
         let _ = socket.send(Message::Text(msg_str.into())).await;
     }
 
-    // Keep connection alive and handle incoming messages
-    while let Some(Ok(msg)) = socket.recv().await {
-        match msg {
-            Message::Text(text) => {
-                // Handle feature_flags or other client messages
-                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if parsed.get("type").and_then(|t| t.as_str()) == Some("feature_flags") {
-                        // Acknowledge feature flags (no-op for now)
-                        tracing::debug!("Received feature_flags from client {client_id}");
-                    }
+    // Subscribe to the progress broadcast channel
+    let mut progress_rx = state.progress_tx.subscribe();
+
+    // Keep connection alive, forwarding progress messages and handling client messages
+    loop {
+        tokio::select! {
+            // Forward progress broadcasts to the WebSocket client
+            Ok(progress_msg) = progress_rx.recv() => {
+                if socket.send(Message::Text(progress_msg.into())).await.is_err() {
+                    break;
                 }
             }
-            Message::Close(_) => break,
-            _ => {}
+            // Handle incoming messages from the client
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) {
+                            if parsed.get("type").and_then(|t| t.as_str()) == Some("feature_flags") {
+                                tracing::debug!("Received feature_flags from client {client_id}");
+                            }
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
         }
     }
 

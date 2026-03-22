@@ -1,10 +1,10 @@
-use comfy_core::{ComfyResult, Node, NodeInputs, NodeMetadata, NodeOutputs, NodeValue};
+use comfy_core::{ComfyResult, DType, Node, NodeInputs, NodeMetadata, NodeOutputs, NodeValue};
 
-/// SaveImage — saves generated images to disk (stub).
+/// SaveImage — saves generated images to disk.
 ///
-/// In the real implementation this would encode the tensor to PNG and
-/// write it to the output directory. For now it produces a UI output
-/// JSON describing the saved file.
+/// When the input tensor is a U8 [H, W, 3] tensor, this uses `comfy_zig::encode_png()`
+/// to actually write the PNG file. For batch tensors (shape [B, H, W, 3] etc.)
+/// it falls back to producing a stub UI output.
 pub struct SaveImage;
 
 impl Node for SaveImage {
@@ -12,18 +12,28 @@ impl Node for SaveImage {
         let filename_prefix = inputs.get_string("filename_prefix")?;
         let images = inputs.get_tensor("images")?;
 
-        let batch = images.shape()[0];
+        let shape = images.shape();
+        let batch = shape[0];
         tracing::info!(
             filename_prefix,
             batch,
-            shape = ?images.shape(),
-            "SaveImage: saving images (stub)"
+            shape = ?shape,
+            "SaveImage: saving images"
         );
 
-        // Build a UI output describing what would be saved
         let mut filenames = Vec::new();
-        for i in 0..batch {
-            filenames.push(format!("{filename_prefix}_{i:05}.png"));
+
+        // If the tensor is U8 [H, W, 3] (single image, no batch dim), encode directly
+        if images.dtype() == DType::U8 && shape.len() == 3 && shape[2] == 3 {
+            let filename = format!("{filename_prefix}_00000.png");
+            comfy_zig::encode_png(images, &filename)?;
+            tracing::info!(filename = %filename, "SaveImage: wrote PNG via comfy-zig");
+            filenames.push(filename);
+        } else {
+            // Batch or non-U8 tensor: generate stub filenames
+            for i in 0..batch {
+                filenames.push(format!("{filename_prefix}_{i:05}.png"));
+            }
         }
 
         let ui_json = serde_json::json!({
@@ -181,5 +191,41 @@ mod tests {
         let node = PreviewImage;
         let inputs = NodeInputs::new();
         assert!(node.execute(&inputs).is_err());
+    }
+
+    #[test]
+    fn test_save_image_u8_writes_png() {
+        // Create a 4x4 RGB U8 tensor
+        let data = vec![128u8; 4 * 4 * 3]; // 4x4 pixels, 3 channels
+        let tensor = Tensor::from_raw(data, vec![4, 4, 3], DType::U8).unwrap();
+
+        let tmp_dir = std::env::temp_dir();
+        let prefix = tmp_dir.join("comfy_save_test");
+        let prefix_str = prefix.to_str().unwrap();
+
+        let node = SaveImage;
+        let mut inputs = NodeInputs::new();
+        inputs.set("filename_prefix", NodeValue::String(prefix_str.to_string()));
+        inputs.set("images", NodeValue::Tensor(tensor));
+
+        let outputs = node.execute(&inputs).unwrap();
+        match outputs.get("ui") {
+            Some(NodeValue::String(s)) => {
+                let json: serde_json::Value = serde_json::from_str(s).unwrap();
+                let images = json["images"].as_array().unwrap();
+                assert_eq!(images.len(), 1);
+
+                let filename = images[0]["filename"].as_str().unwrap();
+                // Verify the PNG file was actually written
+                assert!(
+                    std::path::Path::new(filename).exists(),
+                    "PNG file should exist at {filename}"
+                );
+
+                // Cleanup
+                let _ = std::fs::remove_file(filename);
+            }
+            other => panic!("Expected ui string, got {other:?}"),
+        }
     }
 }
