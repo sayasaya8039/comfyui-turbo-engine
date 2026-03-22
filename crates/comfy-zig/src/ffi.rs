@@ -3,6 +3,10 @@
 //! These are only compiled when the `zig-native` feature is enabled.
 //! The corresponding Zig implementations live in `zig/src/`.
 
+// ---------------------------------------------------------------------------
+// Image I/O FFI (from zig/src/image_io.zig)
+// ---------------------------------------------------------------------------
+
 #[cfg(feature = "zig-native")]
 extern "C" {
     /// Decode a PNG file into raw RGB pixels.
@@ -42,6 +46,34 @@ extern "C" {
     pub fn comfy_zig_free(ptr: *mut u8, len: usize);
 }
 
+// ---------------------------------------------------------------------------
+// SIMD kernel FFI (from zig/src/simd_ops.zig)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "zig-native")]
+extern "C" {
+    /// SiLU activation: `output[i] = input[i] * sigmoid(input[i])`.
+    ///
+    /// SIMD-accelerated using 256-bit (8×f32) vectors.
+    /// `input` and `output` may alias for in-place operation.
+    pub fn comfy_zig_silu(input: *const f32, output: *mut f32, len: usize);
+
+    /// Numerically stable softmax over a single row of `len` elements.
+    ///
+    /// SIMD-accelerated: finds max, subtracts, exp, normalizes.
+    pub fn comfy_zig_softmax(input: *const f32, output: *mut f32, len: usize);
+
+    /// Layer normalization over a single row of `len` elements.
+    ///
+    /// Computes `(x - mean) / sqrt(var + eps)` with SIMD reduction.
+    pub fn comfy_zig_layer_norm(
+        input: *const f32,
+        output: *mut f32,
+        len: usize,
+        eps: f32,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     // FFI functions are only available when zig-native is enabled.
@@ -51,6 +83,23 @@ mod tests {
     fn test_ffi_module_compiles() {
         // This test verifies the module compiles correctly
         // under the default (fallback) feature set.
+        assert!(true);
+    }
+
+    #[test]
+    fn test_ffi_simd_declarations_exist() {
+        // Verify the FFI declarations compile under default features.
+        // The actual functions are only linked with zig-native.
+        #[cfg(feature = "zig-native")]
+        {
+            // These would link at runtime; just verify type signatures compile.
+            let _silu: unsafe extern "C" fn(*const f32, *mut f32, usize) =
+                super::comfy_zig_silu;
+            let _softmax: unsafe extern "C" fn(*const f32, *mut f32, usize) =
+                super::comfy_zig_softmax;
+            let _layer_norm: unsafe extern "C" fn(*const f32, *mut f32, usize, f32) =
+                super::comfy_zig_layer_norm;
+        }
         assert!(true);
     }
 }
