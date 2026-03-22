@@ -420,3 +420,82 @@ async fn test_get_view_stub() {
 
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
+
+// -----------------------------------------------------------------------
+// 16. GET /models — returns folder types
+// -----------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_get_models_returns_folder_types() {
+    let (status, json) = send(
+        Request::builder()
+            .uri("/models")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let arr = json.as_array().expect("models should be an array");
+    let names: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
+    assert!(names.contains(&"checkpoints"), "should contain checkpoints");
+    assert!(names.contains(&"loras"), "should contain loras");
+    assert!(names.contains(&"vae"), "should contain vae");
+    assert!(names.contains(&"embeddings"), "should contain embeddings");
+}
+
+// -----------------------------------------------------------------------
+// 17. GET /api/models — dual prefix for models
+// -----------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_api_prefix_models() {
+    let (status, json) = send(
+        Request::builder()
+            .uri("/api/models")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let arr = json.as_array().expect("models should be an array");
+    let names: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
+    assert!(names.contains(&"checkpoints"), "/api/models should contain checkpoints");
+}
+
+// -----------------------------------------------------------------------
+// 18. GET /models/{folder} — returns files list (empty for non-existent dir)
+// -----------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_get_models_by_folder_returns_array() {
+    let (status, json) = send(
+        Request::builder()
+            .uri("/models/checkpoints")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.is_array(), "/models/checkpoints should return an array");
+}
+
+// -----------------------------------------------------------------------
+// 19. GET /api/models/{folder} — dual prefix
+// -----------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_api_prefix_models_by_folder() {
+    let (status, json) = send(
+        Request::builder()
+            .uri("/api/models/loras")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(json.is_array(), "/api/models/loras should return an array");
+}

@@ -262,6 +262,36 @@ pub async fn get_embeddings() -> impl IntoResponse {
 }
 
 // ---------------------------------------------------------------------------
+// GET /models — list model folder types
+// ---------------------------------------------------------------------------
+
+pub async fn get_models(State(state): State<AppState>) -> impl IntoResponse {
+    Json(serde_json::to_value(state.folder_paths.folder_names()).unwrap())
+}
+
+// ---------------------------------------------------------------------------
+// GET /models/{folder} — list files in a model folder
+// ---------------------------------------------------------------------------
+
+pub async fn get_models_by_folder(
+    State(state): State<AppState>,
+    Path(folder): Path<String>,
+) -> impl IntoResponse {
+    let paths = state.folder_paths.get_folder_paths(&folder);
+    let mut files = Vec::new();
+    for p in paths {
+        if let Ok(entries) = std::fs::read_dir(p) {
+            for entry in entries.flatten() {
+                if entry.path().is_file() {
+                    files.push(entry.file_name().to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    Json(serde_json::to_value(files).unwrap())
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

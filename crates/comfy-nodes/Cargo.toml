@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 comfy-core = { path = "../comfy-core" }
 comfy-inference = { path = "../comfy-inference" }
+comfy-julia = { path = "../comfy-julia" }
 comfy-zig = { path = "../comfy-zig" }
 tracing = { workspace = true }
 serde_json = { workspace = true }

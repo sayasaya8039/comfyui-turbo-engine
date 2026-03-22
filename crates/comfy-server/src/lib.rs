@@ -52,6 +52,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/object_info", get(routes::get_object_info))
         // Embeddings stub
         .route("/embeddings", get(routes::get_embeddings))
+        // Models
+        .route("/models", get(routes::get_models))
+        .route("/models/{folder}", get(routes::get_models_by_folder))
         // Upload/View stubs
         .route("/view", get(upload::view_image))
         .route("/upload/image", post(upload::upload_image));
