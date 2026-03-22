@@ -3,9 +3,11 @@ resolver = "2"
 members = [
     "crates/comfy-core",
     "crates/comfy-inference",
+    "crates/comfy-julia",
     "crates/comfy-nodes",
     "crates/comfy-server",
     "crates/comfy-zig",
+    "crates/comfy-python",
 ]
 
 [workspace.package]

@@ -1,0 +1,15 @@
+[package]
+name = "comfy-python"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+python = ["pyo3"]
+
+[dependencies]
+comfy-core = { path = "../comfy-core" }
+pyo3 = { version = "0.23", features = ["auto-initialize"], optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
