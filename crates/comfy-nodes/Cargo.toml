@@ -1,0 +1,6 @@
+[package]
+name = "comfy-nodes"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
