@@ -71,6 +71,7 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<&Path>) 
         .route("/settings", get(routes::get_settings).post(routes::post_settings))
         .route("/settings/{id}", get(routes::get_setting_by_id))
         // User data
+        .route("/userdata", get(routes::get_userdata_query))
         .route("/userdata/{*path}", get(routes::get_userdata).post(routes::post_userdata))
         // Internal
         .route("/internal/logs", get(routes::get_internal_logs))
@@ -78,7 +79,17 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<&Path>) 
         // Free memory
         .route("/free", post(routes::post_free))
         // Users
-        .route("/users", get(routes::get_users));
+        .route("/users", get(routes::get_users))
+        // Workflow templates
+        .route("/workflow_templates", get(routes::get_workflow_templates))
+        // i18n
+        .route("/i18n", get(routes::get_i18n))
+        // Jobs
+        .route("/jobs", get(routes::get_jobs))
+        // Subgraphs
+        .route("/global_subgraphs", get(routes::get_global_subgraphs))
+        // Experimental
+        .route("/experiment/models", get(routes::get_experiment_models));
 
     let mut app_router = Router::new()
         // Direct endpoints (e.g. /prompt)

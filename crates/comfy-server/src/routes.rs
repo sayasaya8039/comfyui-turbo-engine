@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json},
 };
@@ -346,7 +346,16 @@ pub async fn get_setting_by_id(Path(_id): Path<String>) -> impl IntoResponse {
 // ---------------------------------------------------------------------------
 
 pub async fn get_userdata(Path(_path): Path<String>) -> impl IntoResponse {
-    StatusCode::NOT_FOUND
+    // Return empty JSON for known config files, 404 for others
+    if _path.ends_with(".json") {
+        return (StatusCode::OK, Json(json!({}))).into_response();
+    }
+    StatusCode::NOT_FOUND.into_response()
+}
+
+/// GET /userdata?dir=workflows&recurse=true — list user files in directory
+pub async fn get_userdata_query() -> impl IntoResponse {
+    Json(json!([]))
 }
 
 pub async fn post_userdata(Path(_path): Path<String>) -> impl IntoResponse {
@@ -382,6 +391,57 @@ pub async fn post_free() -> impl IntoResponse {
 // ---------------------------------------------------------------------------
 
 pub async fn get_users() -> impl IntoResponse {
+    Json(json!([]))
+}
+
+// ---------------------------------------------------------------------------
+// GET /workflow_templates — Workflow template list
+// ---------------------------------------------------------------------------
+
+pub async fn get_workflow_templates() -> impl IntoResponse {
+    Json(json!([]))
+}
+
+// ---------------------------------------------------------------------------
+// GET /i18n — Internationalization strings
+// ---------------------------------------------------------------------------
+
+pub async fn get_i18n() -> impl IntoResponse {
+    Json(json!({}))
+}
+
+// ---------------------------------------------------------------------------
+// GET /jobs — Job queue status
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub struct JobsQuery {
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default = "default_jobs_limit")]
+    pub limit: usize,
+    #[serde(default)]
+    pub offset: usize,
+}
+fn default_jobs_limit() -> usize { 200 }
+
+pub async fn get_jobs(Query(_q): Query<JobsQuery>) -> impl IntoResponse {
+    Json(json!([]))
+}
+
+// ---------------------------------------------------------------------------
+// GET /global_subgraphs — Global subgraph definitions
+// ---------------------------------------------------------------------------
+
+pub async fn get_global_subgraphs() -> impl IntoResponse {
+    Json(json!([]))
+}
+
+// ---------------------------------------------------------------------------
+// GET /experiment/models — Experimental model endpoint
+// ---------------------------------------------------------------------------
+
+pub async fn get_experiment_models() -> impl IntoResponse {
     Json(json!([]))
 }
 
