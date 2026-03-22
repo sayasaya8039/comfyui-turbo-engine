@@ -148,6 +148,12 @@ dependencies = [
 [[package]]
 name = "comfy-nodes"
 version = "0.1.0"
+dependencies = [
+ "comfy-core",
+ "comfy-inference",
+ "serde_json",
+ "tracing",
+]
 
 [[package]]
 name = "comfy-server"
@@ -155,6 +161,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "comfy-core",
+ "comfy-nodes",
  "serde",
  "serde_json",
  "tokio",

@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 comfy-core = { path = "../comfy-core" }
+comfy-nodes = { path = "../comfy-nodes" }
 axum = { version = "0.8", features = ["multipart", "ws"] }
 tokio = { workspace = true }
 serde = { workspace = true }

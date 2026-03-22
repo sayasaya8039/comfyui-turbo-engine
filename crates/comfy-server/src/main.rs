@@ -26,8 +26,9 @@ async fn main() {
         )
         .init();
 
-    // Create empty registry — node registration happens in Task 7
-    let registry = NodeRegistry::new();
+    // Register all standard nodes
+    let mut registry = NodeRegistry::new();
+    comfy_nodes::register_all_nodes(&mut registry);
 
     let base_path = PathBuf::from(".");
     let state = AppState::new(registry, base_path);
