@@ -3,6 +3,14 @@ name = "comfy-server"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+name = "comfy_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "comfy-server"
+path = "src/main.rs"
+
 [dependencies]
 comfy-core = { path = "../comfy-core" }
 comfy-nodes = { path = "../comfy-nodes" }
@@ -14,3 +22,8 @@ tower-http = { version = "0.6", features = ["cors", "fs"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+hyper = "1"
