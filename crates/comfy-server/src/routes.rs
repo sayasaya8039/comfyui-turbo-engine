@@ -316,6 +316,76 @@ pub async fn get_features() -> impl IntoResponse {
 }
 
 // ---------------------------------------------------------------------------
+// GET /extensions — List frontend extensions (JS files)
+// ---------------------------------------------------------------------------
+
+pub async fn get_extensions() -> impl IntoResponse {
+    Json(json!([]))
+}
+
+// ---------------------------------------------------------------------------
+// GET /settings — User settings
+// ---------------------------------------------------------------------------
+
+pub async fn get_settings() -> impl IntoResponse {
+    Json(json!({}))
+}
+
+// POST /settings — Save user settings
+pub async fn post_settings() -> impl IntoResponse {
+    StatusCode::OK
+}
+
+// GET /settings/{id} — Get single setting
+pub async fn get_setting_by_id(Path(_id): Path<String>) -> impl IntoResponse {
+    Json(json!(null))
+}
+
+// ---------------------------------------------------------------------------
+// GET /userdata/* — User data files
+// ---------------------------------------------------------------------------
+
+pub async fn get_userdata(Path(_path): Path<String>) -> impl IntoResponse {
+    StatusCode::NOT_FOUND
+}
+
+pub async fn post_userdata(Path(_path): Path<String>) -> impl IntoResponse {
+    StatusCode::OK
+}
+
+// ---------------------------------------------------------------------------
+// GET /internal/logs — Internal logs
+// ---------------------------------------------------------------------------
+
+pub async fn get_internal_logs() -> impl IntoResponse {
+    Json(json!([]))
+}
+
+// ---------------------------------------------------------------------------
+// GET /internal/files — Internal file listing
+// ---------------------------------------------------------------------------
+
+pub async fn get_internal_files() -> impl IntoResponse {
+    Json(json!([]))
+}
+
+// ---------------------------------------------------------------------------
+// POST /free — Free memory
+// ---------------------------------------------------------------------------
+
+pub async fn post_free() -> impl IntoResponse {
+    StatusCode::OK
+}
+
+// ---------------------------------------------------------------------------
+// GET /users — User list (required by frontend bootstrap)
+// ---------------------------------------------------------------------------
+
+pub async fn get_users() -> impl IntoResponse {
+    Json(json!([]))
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
