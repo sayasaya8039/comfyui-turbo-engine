@@ -499,3 +499,60 @@ async fn test_api_prefix_models_by_folder() {
     assert_eq!(status, StatusCode::OK);
     assert!(json.is_array(), "/api/models/loras should return an array");
 }
+
+// -----------------------------------------------------------------------
+// 20. GET /features — engine capabilities
+// -----------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_get_features() {
+    let (status, json) = send(
+        Request::builder()
+            .uri("/features")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        json["engine"].as_str().unwrap(),
+        "comfyui-turbo",
+        "engine should be comfyui-turbo"
+    );
+    assert!(json["version"].is_string(), "version should be a string");
+    assert!(
+        json["capabilities"]["wasm_plugins"].as_bool().unwrap(),
+        "capabilities.wasm_plugins should be true"
+    );
+    assert!(
+        json["capabilities"]["memory_monitor"].as_bool().unwrap(),
+        "capabilities.memory_monitor should be true"
+    );
+    assert!(
+        json["capabilities"]["graph_optimization"].as_bool().unwrap(),
+        "capabilities.graph_optimization should be true"
+    );
+}
+
+// -----------------------------------------------------------------------
+// 21. GET /api/features — dual prefix for features
+// -----------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_api_prefix_features() {
+    let (status, json) = send(
+        Request::builder()
+            .uri("/api/features")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        json["engine"].as_str().unwrap(),
+        "comfyui-turbo",
+        "/api/features should also return engine info"
+    );
+}

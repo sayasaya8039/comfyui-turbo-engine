@@ -15,6 +15,7 @@ path = "src/main.rs"
 comfy-core = { path = "../comfy-core" }
 comfy-nodes = { path = "../comfy-nodes" }
 comfy-python = { path = "../comfy-python" }
+comfy-wasm = { path = "../comfy-wasm" }
 axum = { version = "0.8", features = ["multipart", "ws"] }
 tokio = { workspace = true }
 serde = { workspace = true }

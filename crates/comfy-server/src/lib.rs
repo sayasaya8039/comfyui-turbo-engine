@@ -57,7 +57,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/models/{folder}", get(routes::get_models_by_folder))
         // Upload/View stubs
         .route("/view", get(upload::view_image))
-        .route("/upload/image", post(upload::upload_image));
+        .route("/upload/image", post(upload::upload_image))
+        // Engine features
+        .route("/features", get(routes::get_features));
 
     Router::new()
         // Direct endpoints (e.g. /prompt)

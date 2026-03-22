@@ -292,6 +292,30 @@ pub async fn get_models_by_folder(
 }
 
 // ---------------------------------------------------------------------------
+// GET /features — Engine capabilities
+// ---------------------------------------------------------------------------
+
+pub async fn get_features() -> impl IntoResponse {
+    Json(json!({
+        "engine": "comfyui-turbo",
+        "version": env!("CARGO_PKG_VERSION"),
+        "capabilities": {
+            "native_samplers": true,
+            "zig_simd_kernels": true,
+            "wasm_plugins": true,
+            "julia_acceleration": true,
+            "python_compat": true,
+            "kernel_fusion": true,
+            "int8_quantization": true,
+            "fp16_quantization": true,
+            "multi_device": true,
+            "memory_monitor": true,
+            "graph_optimization": true
+        }
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
