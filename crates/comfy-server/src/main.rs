@@ -11,7 +11,8 @@ async fn main() {
 
     let app = comfy_server::build_app();
 
-    let addr = "127.0.0.1:8188";
+    let port = std::env::var("COMFY_PORT").unwrap_or_else(|_| "8188".to_string());
+    let addr = format!("127.0.0.1:{port}");
     tracing::info!("ComfyUI Turbo server starting on http://{addr}");
 
     let listener = tokio::net::TcpListener::bind(addr)
