@@ -1,0 +1,14 @@
+[package]
+name = "comfy-julia"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+julia = []
+
+[dependencies]
+comfy-core = { path = "../comfy-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
