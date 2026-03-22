@@ -12,7 +12,15 @@ async fn main() {
     let port = std::env::var("COMFY_PORT").unwrap_or_else(|_| "8188".to_string());
     let frontend_dir = std::env::var("COMFY_FRONTEND").ok().map(PathBuf::from);
 
-    let app = comfy_server::build_app_with_frontend(frontend_dir.as_deref());
+    // Build template asset map from Python venv (if available)
+    let template_map = std::env::var("COMFY_VENV").ok().and_then(|venv| {
+        comfy_server::templates::build_asset_map_from_venv(&venv)
+    });
+
+    let app = comfy_server::build_app_full(
+        frontend_dir.as_deref(),
+        template_map,
+    );
 
     let addr = format!("127.0.0.1:{port}");
     tracing::info!("ComfyUI Turbo server starting on http://{addr}");

@@ -2,6 +2,7 @@ pub mod history;
 pub mod queue;
 pub mod routes;
 pub mod state;
+pub mod templates;
 pub mod upload;
 pub mod ws;
 
@@ -16,24 +17,28 @@ use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
 use crate::state::AppState;
+use crate::templates::TemplateAssetMap;
 
-/// Build app for integration tests (no frontend).
+/// Build app for integration tests (no frontend, no templates).
 pub fn build_app() -> Router {
-    build_app_with_frontend(None)
+    build_app_full(None, None)
 }
 
-/// Build app with optional frontend static file serving.
+/// Build app with optional frontend static file serving (no templates).
 pub fn build_app_with_frontend(frontend_dir: Option<&Path>) -> Router {
+    build_app_full(frontend_dir, None)
+}
+
+/// Build app with optional frontend + template asset map from Python venv.
+pub fn build_app_full(
+    frontend_dir: Option<&Path>,
+    template_map: Option<TemplateAssetMap>,
+) -> Router {
     let mut registry = NodeRegistry::new();
     comfy_nodes::register_all_nodes(&mut registry);
 
     let state = AppState::new(registry, PathBuf::from("."));
-    build_router(state, frontend_dir)
-}
 
-/// Build the axum Router with optional frontend serving.
-/// Templates are NOT served — use Python server for templates.
-fn build_router(state: AppState, frontend_dir: Option<&Path>) -> Router {
     let api_routes = Router::new()
         .route("/prompt", get(routes::get_prompt).post(routes::post_prompt))
         .route("/queue", get(routes::get_queue).post(routes::post_queue))
@@ -66,9 +71,19 @@ fn build_router(state: AppState, frontend_dir: Option<&Path>) -> Router {
     let mut app_router = Router::new()
         .merge(api_routes.clone())
         .nest("/api", api_routes)
-        .route("/ws", get(ws::ws_handler));
+        .route("/ws", get(ws::ws_handler))
+        .with_state(state);
 
-    // Serve frontend static files as fallback
+    // Template assets from Python venv (resolved at startup)
+    if let Some(map) = template_map {
+        tracing::info!("Templates: {} assets from Python venv", map.len());
+        app_router = app_router.route(
+            "/templates/{filename}",
+            get(templates::serve_template).with_state(map),
+        );
+    }
+
+    // Frontend static files as fallback
     if let Some(dir) = frontend_dir {
         if dir.exists() {
             tracing::info!("Serving frontend from: {}", dir.display());
@@ -76,7 +91,5 @@ fn build_router(state: AppState, frontend_dir: Option<&Path>) -> Router {
         }
     }
 
-    app_router
-        .layer(CorsLayer::permissive())
-        .with_state(state)
+    app_router.layer(CorsLayer::permissive())
 }
