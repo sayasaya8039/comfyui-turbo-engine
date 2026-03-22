@@ -182,26 +182,41 @@ pub async fn post_history(
 // ---------------------------------------------------------------------------
 
 pub async fn get_system_stats() -> impl IntoResponse {
+    use comfy_core::{Device, HardwareDetector};
+
+    let hw = HardwareDetector::detect();
+    let devices: Vec<serde_json::Value> = hw
+        .devices
+        .iter()
+        .map(|d| {
+            json!({
+                "name": d.name,
+                "type": format!("{}", d.device),
+                "index": match d.device {
+                    Device::Gpu(i) | Device::Npu(i) => i,
+                    Device::Cpu => 0,
+                },
+                "vram_total": d.memory_bytes,
+                "vram_free": 0,
+                "torch_vram_total": 0,
+                "torch_vram_free": 0,
+                "compute_units": d.compute_units,
+            })
+        })
+        .collect();
+
     Json(json!({
         "system": {
             "os": std::env::consts::OS,
+            "ram_total": 0,
+            "ram_free": 0,
             "comfyui_version": "0.8.24-turbo",
-            "python_version": "N/A (native)",
-            "pytorch_version": "N/A (native)",
+            "python_version": "N/A (native engine)",
+            "pytorch_version": "N/A (ONNX Runtime)",
             "embedded_python": false,
             "argv": []
         },
-        "devices": [
-            {
-                "name": "cpu",
-                "type": "cpu",
-                "index": 0,
-                "vram_total": 0,
-                "vram_free": 0,
-                "torch_vram_total": 0,
-                "torch_vram_free": 0
-            }
-        ]
+        "devices": devices
     }))
 }
 

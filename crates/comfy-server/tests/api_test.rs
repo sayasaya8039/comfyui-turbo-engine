@@ -324,6 +324,39 @@ async fn test_api_prefix_system_stats() {
 }
 
 // -----------------------------------------------------------------------
+// 12b. GET /system_stats — device details from HardwareDetector
+// -----------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_system_stats_has_device_details() {
+    let (status, json) = send(
+        Request::builder()
+            .uri("/system_stats")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let devices = json["devices"].as_array().unwrap();
+    assert!(!devices.is_empty(), "should have at least one device");
+
+    // At least CPU should be present
+    assert!(
+        devices.iter().any(|d| d["name"].as_str().unwrap().contains("CPU")),
+        "should contain a CPU device"
+    );
+
+    // Each device should have required fields
+    for d in devices {
+        assert!(d["name"].is_string(), "device name should be string");
+        assert!(d["type"].is_string(), "device type should be string");
+        assert!(d["vram_total"].is_number(), "device vram_total should be number");
+        assert!(d["compute_units"].is_number(), "device compute_units should be number");
+    }
+}
+
+// -----------------------------------------------------------------------
 // 13. GET /api/object_info — dual prefix for object_info
 // -----------------------------------------------------------------------
 
