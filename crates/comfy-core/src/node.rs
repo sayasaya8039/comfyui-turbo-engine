@@ -154,6 +154,15 @@ pub struct NodeMetadata {
 pub trait Node: Send + Sync {
     fn execute(&self, inputs: &NodeInputs) -> ComfyResult<NodeOutputs>;
     fn metadata(&self) -> NodeMetadata;
+
+    /// Returns the preferred device for this node's execution.
+    ///
+    /// Defaults to CPU. Nodes that benefit from GPU acceleration
+    /// (e.g. KSampler, VAEDecode) should override this to return
+    /// `Device::Gpu(0)` or similar.
+    fn device_hint(&self) -> crate::device::Device {
+        crate::device::Device::Cpu
+    }
 }
 
 #[cfg(test)]
@@ -265,5 +274,11 @@ mod tests {
     fn test_node_is_send_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<Box<dyn Node>>();
+    }
+
+    #[test]
+    fn test_default_device_hint_is_cpu() {
+        let node = AddOneNode;
+        assert_eq!(node.device_hint(), crate::device::Device::Cpu);
     }
 }

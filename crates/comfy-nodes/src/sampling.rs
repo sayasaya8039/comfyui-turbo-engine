@@ -47,6 +47,10 @@ impl Node for KSampler {
             output_node: false,
         }
     }
+
+    fn device_hint(&self) -> comfy_core::Device {
+        comfy_core::Device::Gpu(0)
+    }
 }
 
 #[cfg(test)]
@@ -116,5 +120,11 @@ mod tests {
         assert_eq!(meta.name, "KSampler");
         assert_eq!(meta.category, "sampling");
         assert!(!meta.output_node);
+    }
+
+    #[test]
+    fn test_ksampler_device_hint_is_gpu() {
+        use comfy_core::Node;
+        assert_eq!(KSampler.device_hint(), comfy_core::Device::Gpu(0));
     }
 }

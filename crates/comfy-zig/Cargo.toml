@@ -1,0 +1,14 @@
+[package]
+name = "comfy-zig"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = ["fallback"]
+zig-native = []
+fallback = ["image"]
+
+[dependencies]
+comfy-core = { path = "../comfy-core" }
+image = { version = "0.25", optional = true }
+tracing = { workspace = true }
