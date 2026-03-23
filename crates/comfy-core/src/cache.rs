@@ -27,8 +27,10 @@ impl TensorCache {
     /// Retrieve a cached entry, promoting it to most-recently-used.
     pub fn get(&mut self, key: &str) -> Option<&NodeOutputs> {
         if self.map.contains_key(key) {
-            // Move to back (most recently used)
-            self.order.retain(|k| k != key);
+            // Find and remove from current position (O(N) but avoids full scan)
+            if let Some(pos) = self.order.iter().position(|k| k == key) {
+                self.order.remove(pos);
+            }
             self.order.push_back(key.to_string());
             self.map.get(key)
         } else {

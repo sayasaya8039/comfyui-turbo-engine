@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::cache::TensorCache;
 use crate::dag::Dag;
 use crate::error::{ComfyError, ComfyResult};
-use crate::node::{NodeInputs, NodeOutputs, NodeValue};
+use crate::node::{output_key, NodeInputs, NodeOutputs, NodeValue};
 use crate::registry::NodeRegistry;
 use crate::workflow::{InputValue, Workflow};
 
@@ -94,7 +94,7 @@ impl Executor {
                         message: "output not yet computed".to_string(),
                     }
                 })?;
-                let key = format!("output_{output_index}");
+                let key = output_key(*output_index);
                 source_outputs
                     .get(&key)
                     .cloned()

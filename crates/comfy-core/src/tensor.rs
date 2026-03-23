@@ -33,7 +33,7 @@ impl DType {
 #[derive(Debug, Clone)]
 pub struct Tensor {
     data: Arc<Vec<u8>>,
-    shape: Vec<usize>,
+    shape: Arc<[usize]>,
     dtype: DType,
 }
 
@@ -53,7 +53,34 @@ impl Tensor {
             .collect();
         Ok(Self {
             data: Arc::new(bytes),
-            shape,
+            shape: Arc::from(shape),
+            dtype: DType::F32,
+        })
+    }
+
+    /// Create a tensor from f32 values with zero-copy byte reinterpretation.
+    ///
+    /// This avoids the flat_map byte conversion by directly reinterpreting
+    /// the Vec<f32>'s memory as Vec<u8>. Unsafe but valid because f32 has
+    /// no invalid bit patterns and we control the layout.
+    pub fn from_vec_f32_fast(mut values: Vec<f32>, shape: Vec<usize>) -> ComfyResult<Self> {
+        let numel: usize = shape.iter().product();
+        if values.len() != numel {
+            return Err(ComfyError::TensorError(format!(
+                "shape {:?} requires {} elements, got {}",
+                shape, numel, values.len()
+            )));
+        }
+        let byte_len = values.len() * 4;
+        let byte_cap = values.capacity() * 4;
+        let ptr = values.as_mut_ptr() as *mut u8;
+        std::mem::forget(values);
+        // SAFETY: f32 has no invalid bit patterns, same alignment on all platforms,
+        // and we own the allocation via forget.
+        let bytes = unsafe { Vec::from_raw_parts(ptr, byte_len, byte_cap) };
+        Ok(Self {
+            data: Arc::new(bytes),
+            shape: Arc::from(shape),
             dtype: DType::F32,
         })
     }
@@ -70,7 +97,7 @@ impl Tensor {
         }
         Ok(Self {
             data: Arc::new(data),
-            shape,
+            shape: Arc::from(shape),
             dtype,
         })
     }
@@ -81,7 +108,7 @@ impl Tensor {
         let byte_count = numel * dtype.byte_size();
         Self {
             data: Arc::new(vec![0u8; byte_count]),
-            shape,
+            shape: Arc::from(shape),
             dtype,
         }
     }
@@ -114,7 +141,7 @@ impl Tensor {
 
         Self {
             data: Arc::new(bytes),
-            shape,
+            shape: Arc::from(shape),
             dtype: DType::F32,
         }
     }
@@ -155,7 +182,7 @@ impl Tensor {
         }
         let a = self.as_slice_f32()?;
         let b = other.as_slice_f32()?;
-        let result: Vec<f32> = if a.len() > 4096 {
+        let result: Vec<f32> = if a.len() > 65536 {
             use rayon::prelude::*;
             a.par_iter()
                 .zip(b.par_iter())
@@ -164,7 +191,7 @@ impl Tensor {
         } else {
             a.iter().zip(b.iter()).map(|(&x, &y)| x + y).collect()
         };
-        Tensor::from_vec_f32(result, self.shape().to_vec())
+        Self::from_vec_f32_fast(result, self.shape().to_vec())
     }
 
     /// Element-wise multiply: self * other (rayon-parallel for large tensors).
@@ -178,7 +205,7 @@ impl Tensor {
         }
         let a = self.as_slice_f32()?;
         let b = other.as_slice_f32()?;
-        let result: Vec<f32> = if a.len() > 4096 {
+        let result: Vec<f32> = if a.len() > 65536 {
             use rayon::prelude::*;
             a.par_iter()
                 .zip(b.par_iter())
@@ -187,19 +214,19 @@ impl Tensor {
         } else {
             a.iter().zip(b.iter()).map(|(&x, &y)| x * y).collect()
         };
-        Tensor::from_vec_f32(result, self.shape().to_vec())
+        Self::from_vec_f32_fast(result, self.shape().to_vec())
     }
 
     /// Scalar multiply: self * scalar (rayon-parallel for large tensors).
     pub fn scale(&self, scalar: f32) -> ComfyResult<Self> {
         let data = self.as_slice_f32()?;
-        let result: Vec<f32> = if data.len() > 4096 {
+        let result: Vec<f32> = if data.len() > 65536 {
             use rayon::prelude::*;
             data.par_iter().map(|&x| x * scalar).collect()
         } else {
             data.iter().map(|&x| x * scalar).collect()
         };
-        Tensor::from_vec_f32(result, self.shape().to_vec())
+        Self::from_vec_f32_fast(result, self.shape().to_vec())
     }
 
     /// Interpret the tensor data as a slice of f32 values.

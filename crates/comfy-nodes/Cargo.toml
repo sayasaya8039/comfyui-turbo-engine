@@ -8,5 +8,6 @@ comfy-core = { path = "../comfy-core" }
 comfy-inference = { path = "../comfy-inference" }
 comfy-julia = { path = "../comfy-julia" }
 comfy-zig = { path = "../comfy-zig" }
+rayon = "1"
 tracing = { workspace = true }
 serde_json = { workspace = true }

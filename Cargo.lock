@@ -375,6 +375,7 @@ dependencies = [
  "comfy-inference",
  "comfy-julia",
  "comfy-zig",
+ "rayon",
  "serde_json",
  "tracing",
 ]

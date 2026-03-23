@@ -15,10 +15,12 @@ pub mod conditioning;
 pub mod image;
 pub mod latent;
 pub mod loaders;
+pub mod pipeline;
 pub mod sampling;
 
 pub use conditioning::CLIPTextEncode;
 pub use image::{PreviewImage, SaveImage};
+pub use pipeline::{PipelineConfig, PipelineExecutor, PipelineResult, PipelineStats};
 pub use latent::{EmptyLatentImage, VAEDecode};
 pub use loaders::CheckpointLoaderSimple;
 pub use sampling::KSampler;
