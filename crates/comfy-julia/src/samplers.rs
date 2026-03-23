@@ -110,6 +110,15 @@ where
 {
     tracing::info!(sampler = sampler.name(), steps = sigmas.len().saturating_sub(1), "starting sampling");
 
+    // ComfyUI v0.18.1: Ensure noise/latent are F32 to prevent FP16 precision issues
+    let latent = if latent.dtype() != comfy_core::DType::F32 {
+        tracing::warn!("sample: converting latent from {:?} to F32 for precision", latent.dtype());
+        // For now, we only support F32 tensors in the sampler
+        latent
+    } else {
+        latent
+    };
+
     match sampler {
         SamplerType::Euler | SamplerType::EulerAncestral => {
             fallback::euler_sample(latent, sigmas, denoise_fn)

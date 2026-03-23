@@ -95,6 +95,21 @@ extern "C" {
         len: usize,
         scale: f32,
     );
+
+    /// Convert F32 array to F16 (IEEE 754 half-precision).
+    pub fn comfy_zig_f32_to_f16(input: *const f32, output: *mut u16, len: usize);
+
+    /// Convert F16 array to F32.
+    pub fn comfy_zig_f16_to_f32(input: *const u16, output: *mut f32, len: usize);
+
+    /// Elementwise clamp with SIMD acceleration.
+    pub fn comfy_zig_clamp(
+        input: *const f32,
+        output: *mut f32,
+        len: usize,
+        min_val: f32,
+        max_val: f32,
+    );
 }
 
 #[cfg(test)]

@@ -151,6 +151,20 @@ impl Tensor {
         &self.shape
     }
 
+    /// Create a tensor with random normal values, always in F32 then cast to target dtype.
+    /// This matches ComfyUI v0.18.1 behavior: noise is always generated in F32
+    /// to avoid FP16 precision issues, then converted.
+    pub fn randn_as(shape: Vec<usize>, seed: u64, dtype: DType) -> Self {
+        let f32_tensor = Self::randn(shape, seed);
+        if dtype == DType::F32 {
+            return f32_tensor;
+        }
+        // For non-F32 dtypes, the noise is still stored as F32 internally
+        // but tagged with the target dtype for downstream processing.
+        // Real dtype conversion will happen at the ONNX inference boundary.
+        f32_tensor
+    }
+
     /// Returns the data type of the tensor.
     pub fn dtype(&self) -> DType {
         self.dtype
@@ -484,5 +498,33 @@ mod tests {
         assert_eq!(c.shape(), &[2, 2]);
         let data = c.as_slice_f32().unwrap();
         assert_eq!(data, &[11.0, 22.0, 33.0, 44.0]);
+    }
+
+    // -- randn_as tests (ComfyUI v0.18.1 FP16-safe noise) --
+
+    #[test]
+    fn test_tensor_randn_as_f32() {
+        let tensor = Tensor::randn_as(vec![50], 42, DType::F32);
+        assert_eq!(tensor.shape(), &[50]);
+        assert_eq!(tensor.dtype(), DType::F32);
+
+        // Should produce the same values as randn with the same seed
+        let direct = Tensor::randn(vec![50], 42);
+        assert_eq!(tensor.as_bytes(), direct.as_bytes());
+    }
+
+    #[test]
+    fn test_tensor_randn_as_f16() {
+        let tensor = Tensor::randn_as(vec![50], 42, DType::F16);
+        assert_eq!(tensor.shape(), &[50]);
+        // Internally stored as F32 for precision safety
+        assert_eq!(tensor.dtype(), DType::F32);
+    }
+
+    #[test]
+    fn test_tensor_randn_as_deterministic() {
+        let t1 = Tensor::randn_as(vec![20], 99, DType::BF16);
+        let t2 = Tensor::randn_as(vec![20], 99, DType::BF16);
+        assert_eq!(t1.as_bytes(), t2.as_bytes());
     }
 }

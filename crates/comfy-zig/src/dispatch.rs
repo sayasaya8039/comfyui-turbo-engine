@@ -149,6 +149,29 @@ pub fn fused_multiply_add_dispatch(a: &Tensor, b: &Tensor, scale: f32) -> ComfyR
     }
 }
 
+/// Elementwise clamp with automatic SIMD dispatch.
+pub fn clamp_dispatch(x: &Tensor, min_val: f32, max_val: f32) -> ComfyResult<Tensor> {
+    #[cfg(feature = "zig-native")]
+    {
+        let data = x.as_slice_f32()?;
+        let mut output = vec![0.0f32; data.len()];
+        unsafe {
+            crate::ffi::comfy_zig_clamp(
+                data.as_ptr(),
+                output.as_mut_ptr(),
+                data.len(),
+                min_val,
+                max_val,
+            );
+        }
+        Tensor::from_vec_f32_fast(output, x.shape().to_vec())
+    }
+    #[cfg(not(feature = "zig-native"))]
+    {
+        crate::kernels::clamp(x, min_val, max_val)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,5 +221,16 @@ mod tests {
         assert!((data[0] - 12.0).abs() < 1e-5);
         assert!((data[1] - 24.0).abs() < 1e-5);
         assert!((data[2] - 36.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_clamp_dispatch() {
+        let x = Tensor::from_vec_f32(vec![-2.0, 0.5, 1.5, 3.0], vec![4]).unwrap();
+        let result = clamp_dispatch(&x, 0.0, 1.0).unwrap();
+        let data = result.as_slice_f32().unwrap();
+        assert!((data[0] - 0.0).abs() < 1e-6);
+        assert!((data[1] - 0.5).abs() < 1e-6);
+        assert!((data[2] - 1.0).abs() < 1e-6);
+        assert!((data[3] - 1.0).abs() < 1e-6);
     }
 }

@@ -295,6 +295,147 @@ pub fn group_norm(x: &Tensor, num_groups: usize, eps: f32) -> ComfyResult<Tensor
     Tensor::from_vec_f32(result, shape.to_vec())
 }
 
+// ---------------------------------------------------------------------------
+// Canny Edge Detection (FP32-safe, matching ComfyUI v0.18.1)
+// ---------------------------------------------------------------------------
+
+/// Simple Sobel-based edge detection on a single-channel F32 image.
+///
+/// Input: 2-D F32 tensor [H, W] with values in [0.0, 1.0].
+/// Output: 2-D F32 tensor [H, W] with edge magnitudes.
+/// Forces F32 computation regardless of input dtype (ComfyUI v0.18.1 fix).
+pub fn sobel_edges(x: &Tensor) -> ComfyResult<Tensor> {
+    let shape = x.shape();
+    if shape.len() != 2 {
+        return Err(ComfyError::TensorError(format!(
+            "sobel_edges requires 2-D tensor [H, W], got shape {:?}", shape
+        )));
+    }
+
+    let h = shape[0];
+    let w = shape[1];
+    let data = x.as_slice_f32()?;
+    let mut edges = vec![0.0f32; h * w];
+
+    // Sobel kernels
+    for y in 1..h.saturating_sub(1) {
+        for x_pos in 1..w.saturating_sub(1) {
+            let idx = |dy: usize, dx: usize| -> f32 {
+                data[(y + dy - 1) * w + (x_pos + dx - 1)]
+            };
+
+            // Gx = [[-1,0,1],[-2,0,2],[-1,0,1]]
+            let gx = -idx(0, 0) + idx(0, 2)
+                   - 2.0 * idx(1, 0) + 2.0 * idx(1, 2)
+                   - idx(2, 0) + idx(2, 2);
+
+            // Gy = [[-1,-2,-1],[0,0,0],[1,2,1]]
+            let gy = -idx(0, 0) - 2.0 * idx(0, 1) - idx(0, 2)
+                   + idx(2, 0) + 2.0 * idx(2, 1) + idx(2, 2);
+
+            edges[y * w + x_pos] = (gx * gx + gy * gy).sqrt();
+        }
+    }
+
+    Tensor::from_vec_f32_fast(edges, shape.to_vec())
+}
+
+// ---------------------------------------------------------------------------
+// FP16 <-> F32 Conversion
+// ---------------------------------------------------------------------------
+
+/// Convert F32 tensor to F16 bytes.
+/// Each f32 is converted to IEEE 754 half-precision (2 bytes).
+pub fn f32_to_f16(x: &Tensor) -> ComfyResult<Tensor> {
+    let data = x.as_slice_f32()?;
+    let mut f16_bytes = Vec::with_capacity(data.len() * 2);
+    for &val in data {
+        let f16_val = f32_to_f16_scalar(val);
+        f16_bytes.extend_from_slice(&f16_val.to_le_bytes());
+    }
+    Tensor::from_raw(f16_bytes, x.shape().to_vec(), comfy_core::DType::F16)
+}
+
+/// Convert F16 tensor to F32.
+pub fn f16_to_f32(x: &Tensor) -> ComfyResult<Tensor> {
+    if x.dtype() != comfy_core::DType::F16 {
+        return Err(ComfyError::TensorError(format!(
+            "f16_to_f32 requires F16 tensor, got {:?}",
+            x.dtype()
+        )));
+    }
+    let bytes = x.as_bytes();
+    let mut f32_vals = Vec::with_capacity(x.numel());
+    for chunk in bytes.chunks_exact(2) {
+        let f16_bits = u16::from_le_bytes([chunk[0], chunk[1]]);
+        f32_vals.push(f16_to_f32_scalar(f16_bits));
+    }
+    Tensor::from_vec_f32_fast(f32_vals, x.shape().to_vec())
+}
+
+/// Elementwise clamp.
+pub fn clamp(x: &Tensor, min_val: f32, max_val: f32) -> ComfyResult<Tensor> {
+    let data = x.as_slice_f32()?;
+    let result: Vec<f32> = data.iter().map(|&v| v.max(min_val).min(max_val)).collect();
+    Tensor::from_vec_f32_fast(result, x.shape().to_vec())
+}
+
+// Scalar FP16 helpers
+
+fn f32_to_f16_scalar(val: f32) -> u16 {
+    let bits = val.to_bits();
+    let sign = (bits >> 16) & 0x8000;
+    let exp = ((bits >> 23) & 0xFF) as i32;
+    let mantissa = bits & 0x7FFFFF;
+
+    if exp == 0xFF {
+        // Inf/NaN
+        return (sign | 0x7C00 | if mantissa != 0 { 0x200 } else { 0 }) as u16;
+    }
+
+    let new_exp = exp - 127 + 15;
+    if new_exp >= 31 {
+        return (sign | 0x7C00) as u16; // overflow -> Inf
+    }
+    if new_exp <= 0 {
+        return sign as u16; // underflow -> 0
+    }
+
+    (sign | ((new_exp as u32) << 10) | (mantissa >> 13)) as u16
+}
+
+fn f16_to_f32_scalar(bits: u16) -> f32 {
+    let sign = ((bits as u32) << 16) & 0x80000000;
+    let exp = ((bits >> 10) & 0x1F) as u32;
+    let mantissa = (bits & 0x3FF) as u32;
+
+    if exp == 0 {
+        if mantissa == 0 {
+            return f32::from_bits(sign); // +/-0
+        }
+        // Denormalized
+        let mut m = mantissa;
+        let mut e = 1u32;
+        while (m & 0x400) == 0 {
+            m <<= 1;
+            e += 1;
+        }
+        let new_exp = (127 - 15 + 1 - e) << 23;
+        let new_mantissa = (m & 0x3FF) << 13;
+        return f32::from_bits(sign | new_exp | new_mantissa);
+    }
+
+    if exp == 31 {
+        let f32_exp = 0xFF << 23;
+        let f32_mantissa = mantissa << 13;
+        return f32::from_bits(sign | f32_exp | f32_mantissa);
+    }
+
+    let f32_exp = (exp + 127 - 15) << 23;
+    let f32_mantissa = mantissa << 13;
+    f32::from_bits(sign | f32_exp | f32_mantissa)
+}
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -660,5 +801,144 @@ mod tests {
 
         assert!(batch0_mean.abs() < 1e-4, "batch 0 mean = {batch0_mean}");
         assert!(batch1_mean.abs() < 1e-4, "batch 1 mean = {batch1_mean}");
+    }
+
+    // -- Sobel edge detection tests --
+
+    #[test]
+    fn test_sobel_edges_shape() {
+        // 5x5 image with a vertical edge
+        let mut values = vec![0.0f32; 25];
+        for y in 0..5 {
+            for x in 3..5 {
+                values[y * 5 + x] = 1.0;
+            }
+        }
+        let x = Tensor::from_vec_f32(values, vec![5, 5]).unwrap();
+        let result = sobel_edges(&x).unwrap();
+        assert_eq!(result.shape(), &[5, 5]);
+    }
+
+    #[test]
+    fn test_sobel_edges_detects_edge() {
+        // 5x5 image: left half = 0, right half = 1 (vertical edge at column 2-3)
+        let mut values = vec![0.0f32; 25];
+        for y in 0..5 {
+            for x in 3..5 {
+                values[y * 5 + x] = 1.0;
+            }
+        }
+        let x = Tensor::from_vec_f32(values, vec![5, 5]).unwrap();
+        let result = sobel_edges(&x).unwrap();
+        let data = result.as_slice_f32().unwrap();
+
+        // Interior pixels near the edge should have non-zero values
+        // Position (2,2) is near the edge boundary
+        let edge_val = data[2 * 5 + 2];
+        assert!(edge_val > 0.0, "Edge pixel should have non-zero magnitude, got {edge_val}");
+
+        // Position (2,0) is far from the edge, should be zero or near-zero
+        let flat_val = data[2 * 5 + 0];
+        assert!(flat_val.abs() < 1e-6, "Flat region pixel should be ~0, got {flat_val}");
+    }
+
+    #[test]
+    fn test_sobel_edges_uniform_image() {
+        // Uniform image should have all-zero edges
+        let values = vec![0.5f32; 16];
+        let x = Tensor::from_vec_f32(values, vec![4, 4]).unwrap();
+        let result = sobel_edges(&x).unwrap();
+        let data = result.as_slice_f32().unwrap();
+        for &v in data {
+            assert!(v.abs() < 1e-6, "Uniform image should have zero edges, got {v}");
+        }
+    }
+
+    #[test]
+    fn test_sobel_edges_wrong_dims() {
+        let x = Tensor::from_vec_f32(vec![1.0, 2.0, 3.0], vec![3]).unwrap();
+        let result = sobel_edges(&x);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_sobel_edges_border_zero() {
+        // Border pixels should remain zero (no computation at boundaries)
+        let mut values = vec![0.0f32; 25];
+        values[12] = 1.0; // center pixel bright
+        let x = Tensor::from_vec_f32(values, vec![5, 5]).unwrap();
+        let result = sobel_edges(&x).unwrap();
+        let data = result.as_slice_f32().unwrap();
+
+        // Top row should be zero
+        for x_pos in 0..5 {
+            assert!(data[x_pos].abs() < 1e-6, "Top border should be zero");
+        }
+        // Bottom row should be zero
+        for x_pos in 0..5 {
+            assert!(data[4 * 5 + x_pos].abs() < 1e-6, "Bottom border should be zero");
+        }
+        // Left column should be zero
+        for y in 0..5 {
+            assert!(data[y * 5].abs() < 1e-6, "Left border should be zero");
+        }
+        // Right column should be zero
+        for y in 0..5 {
+            assert!(data[y * 5 + 4].abs() < 1e-6, "Right border should be zero");
+        }
+    }
+
+    // -- FP16 conversion tests --
+
+    #[test]
+    fn test_f32_to_f16_roundtrip() {
+        let values = vec![1.0f32, 0.5, -0.5, 0.0, 2.0, -2.0];
+        let x = Tensor::from_vec_f32(values.clone(), vec![6]).unwrap();
+
+        let f16_tensor = f32_to_f16(&x).unwrap();
+        assert_eq!(f16_tensor.dtype(), comfy_core::DType::F16);
+        assert_eq!(f16_tensor.shape(), &[6]);
+
+        let f32_tensor = f16_to_f32(&f16_tensor).unwrap();
+        let data = f32_tensor.as_slice_f32().unwrap();
+        for (i, &expected) in values.iter().enumerate() {
+            assert!(
+                (data[i] - expected).abs() < 1e-3,
+                "roundtrip mismatch at {}: expected {}, got {}",
+                i,
+                expected,
+                data[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_f16_to_f32_wrong_dtype() {
+        let x = Tensor::from_vec_f32(vec![1.0, 2.0], vec![2]).unwrap();
+        let result = f16_to_f32(&x);
+        assert!(result.is_err());
+    }
+
+    // -- Clamp tests --
+
+    #[test]
+    fn test_clamp_basic() {
+        let x = Tensor::from_vec_f32(vec![-2.0, 0.5, 1.5, 3.0], vec![4]).unwrap();
+        let result = clamp(&x, 0.0, 1.0).unwrap();
+        let data = result.as_slice_f32().unwrap();
+        assert!((data[0] - 0.0).abs() < 1e-6);
+        assert!((data[1] - 0.5).abs() < 1e-6);
+        assert!((data[2] - 1.0).abs() < 1e-6);
+        assert!((data[3] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_clamp_all_in_range() {
+        let x = Tensor::from_vec_f32(vec![0.2, 0.5, 0.8], vec![3]).unwrap();
+        let result = clamp(&x, 0.0, 1.0).unwrap();
+        let data = result.as_slice_f32().unwrap();
+        assert!((data[0] - 0.2).abs() < 1e-6);
+        assert!((data[1] - 0.5).abs() < 1e-6);
+        assert!((data[2] - 0.8).abs() < 1e-6);
     }
 }

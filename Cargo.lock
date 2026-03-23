@@ -338,7 +338,7 @@ checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 
 [[package]]
 name = "comfy-core"
-version = "1.0.0"
+version = "2.1.0"
 dependencies = [
  "crossbeam",
  "rayon",
@@ -349,7 +349,7 @@ dependencies = [
 
 [[package]]
 name = "comfy-inference"
-version = "1.0.0"
+version = "2.1.0"
 dependencies = [
  "comfy-core",
  "ort",
@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "comfy-julia"
-version = "1.0.0"
+version = "2.1.0"
 dependencies = [
  "comfy-core",
  "serde",
@@ -369,7 +369,7 @@ dependencies = [
 
 [[package]]
 name = "comfy-nodes"
-version = "1.0.0"
+version = "2.1.0"
 dependencies = [
  "comfy-core",
  "comfy-inference",
@@ -382,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "comfy-python"
-version = "1.0.0"
+version = "2.1.0"
 dependencies = [
  "comfy-core",
  "pyo3",
@@ -393,7 +393,7 @@ dependencies = [
 
 [[package]]
 name = "comfy-server"
-version = "1.0.0"
+version = "2.1.0"
 dependencies = [
  "axum",
  "comfy-core",
@@ -414,7 +414,7 @@ dependencies = [
 
 [[package]]
 name = "comfy-wasm"
-version = "1.0.0"
+version = "2.1.0"
 dependencies = [
  "comfy-core",
  "serde",
@@ -425,7 +425,7 @@ dependencies = [
 
 [[package]]
 name = "comfy-zig"
-version = "1.0.0"
+version = "2.1.0"
 dependencies = [
  "comfy-core",
  "image",

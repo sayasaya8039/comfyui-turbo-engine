@@ -344,6 +344,58 @@ export fn comfy_zig_fused_multiply_add(
 }
 
 // ---------------------------------------------------------------------------
+// FP16 ↔ F32 Conversion (SIMD-accelerated)
+// ---------------------------------------------------------------------------
+
+/// Convert F32 array to F16 (IEEE 754 half-precision).
+/// Uses scalar conversion as Zig's @Vector doesn't directly support f16 on all targets.
+export fn comfy_zig_f32_to_f16(
+    input: [*]const f32,
+    output: [*]u16,
+    len: usize,
+) callconv(.C) void {
+    for (0..len) |i| {
+        const val: f16 = @floatCast(input[i]);
+        output[i] = @bitCast(val);
+    }
+}
+
+/// Convert F16 (IEEE 754 half-precision) to F32.
+export fn comfy_zig_f16_to_f32(
+    input: [*]const u16,
+    output: [*]f32,
+    len: usize,
+) callconv(.C) void {
+    for (0..len) |i| {
+        const val: f16 = @bitCast(input[i]);
+        output[i] = @as(f32, val);
+    }
+}
+
+/// Elementwise clamp: output[i] = clamp(input[i], min_val, max_val)
+/// SIMD-accelerated for F32.
+export fn comfy_zig_clamp(
+    input: [*]const f32,
+    output: [*]f32,
+    len: usize,
+    min_val: f32,
+    max_val: f32,
+) callconv(.C) void {
+    const min_vec: VecF32 = @splat(min_val);
+    const max_vec: VecF32 = @splat(max_val);
+
+    var offset: usize = 0;
+    while (offset + VEC_WIDTH <= len) : (offset += VEC_WIDTH) {
+        const v = load_vec(input, offset, len, 0.0);
+        const clamped = @min(@max(v, min_vec), max_vec);
+        store_vec(output, offset, len, clamped);
+    }
+    while (offset < len) : (offset += 1) {
+        output[offset] = @min(@max(input[offset], min_val), max_val);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -407,4 +459,25 @@ test "fused_multiply_add basic" {
     try std.testing.expectApproxEqAbs(output[1], 24.0, 1e-5);
     try std.testing.expectApproxEqAbs(output[2], 36.0, 1e-5);
     try std.testing.expectApproxEqAbs(output[3], 48.0, 1e-5);
+}
+
+test "f32_to_f16 roundtrip" {
+    var input = [_]f32{ 1.0, 0.5, -0.5, 0.0 };
+    var f16_buf: [4]u16 = undefined;
+    var output: [4]f32 = undefined;
+    comfy_zig_f32_to_f16(&input, &f16_buf, 4);
+    comfy_zig_f16_to_f32(&f16_buf, &output, 4);
+    for (0..4) |i| {
+        try std.testing.expectApproxEqAbs(output[i], input[i], 1e-3);
+    }
+}
+
+test "clamp basic" {
+    var input = [_]f32{ -2.0, 0.5, 1.5, 3.0 };
+    var output: [4]f32 = undefined;
+    comfy_zig_clamp(&input, &output, 4, 0.0, 1.0);
+    try std.testing.expectApproxEqAbs(output[0], 0.0, 1e-6);
+    try std.testing.expectApproxEqAbs(output[1], 0.5, 1e-6);
+    try std.testing.expectApproxEqAbs(output[2], 1.0, 1e-6);
+    try std.testing.expectApproxEqAbs(output[3], 1.0, 1e-6);
 }
