@@ -428,6 +428,7 @@ version = "1.0.0"
 dependencies = [
  "comfy-core",
  "image",
+ "rayon",
  "tracing",
 ]
 

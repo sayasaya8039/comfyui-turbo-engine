@@ -12,9 +12,9 @@ pub mod scheduler;
 pub mod tensor;
 pub mod workflow;
 
-pub use cache::TensorCache;
+pub use cache::{ConcurrentTensorCache, TensorCache};
 pub use dag::Dag;
-pub use device::{Device, DeviceCapabilities, HardwareDetector, HardwareInfo};
+pub use device::{Device, DeviceCapabilities, HardwareDetector, HardwareInfo, TaskType};
 pub use error::{ComfyError, ComfyResult};
 pub use executor::Executor;
 pub use graph_opt::{count_dead_nodes, remove_dead_nodes};

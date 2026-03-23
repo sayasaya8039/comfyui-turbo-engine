@@ -72,6 +72,29 @@ extern "C" {
         len: usize,
         eps: f32,
     );
+
+    /// GELU activation with tanh approximation, SIMD-accelerated.
+    pub fn comfy_zig_gelu(input: *const f32, output: *mut f32, len: usize);
+
+    /// Group normalization, SIMD-accelerated.
+    pub fn comfy_zig_group_norm(
+        input: *const f32,
+        output: *mut f32,
+        batch: usize,
+        channels: usize,
+        spatial: usize,
+        num_groups: usize,
+        eps: f32,
+    );
+
+    /// Fused multiply-add: output = a * scale + b, SIMD-accelerated.
+    pub fn comfy_zig_fused_multiply_add(
+        a: *const f32,
+        b: *const f32,
+        output: *mut f32,
+        len: usize,
+        scale: f32,
+    );
 }
 
 #[cfg(test)]
@@ -99,6 +122,12 @@ mod tests {
                 super::comfy_zig_softmax;
             let _layer_norm: unsafe extern "C" fn(*const f32, *mut f32, usize, f32) =
                 super::comfy_zig_layer_norm;
+            let _gelu: unsafe extern "C" fn(*const f32, *mut f32, usize) =
+                super::comfy_zig_gelu;
+            let _group_norm: unsafe extern "C" fn(*const f32, *mut f32, usize, usize, usize, usize, f32) =
+                super::comfy_zig_group_norm;
+            let _fma: unsafe extern "C" fn(*const f32, *const f32, *mut f32, usize, f32) =
+                super::comfy_zig_fused_multiply_add;
         }
         assert!(true);
     }

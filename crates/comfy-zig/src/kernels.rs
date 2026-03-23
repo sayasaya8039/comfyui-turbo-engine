@@ -39,11 +39,32 @@ pub fn gemm(a: &Tensor, b: &Tensor) -> ComfyResult<Tensor> {
 
     let a_data = a.as_slice_f32()?;
     let b_data = b.as_slice_f32()?;
+
+    // For large matrices, parallelize rows with rayon
+    if m >= 64 {
+        use rayon::prelude::*;
+        let c_chunks: Vec<Vec<f32>> = (0..m)
+            .into_par_iter()
+            .map(|i| {
+                let mut row = vec![0.0f32; n];
+                for p in 0..k {
+                    let a_val = a_data[i * k + p];
+                    for j in 0..n {
+                        row[j] += a_val * b_data[p * n + j];
+                    }
+                }
+                row
+            })
+            .collect();
+        let c: Vec<f32> = c_chunks.into_iter().flatten().collect();
+        return Tensor::from_vec_f32(c, vec![m, n]);
+    }
+
+    // Small matrices: tiled sequential multiplication for cache utilization
     let mut c = vec![0.0f32; m * n];
 
     const TILE: usize = 32;
 
-    // Tiled multiplication for better cache utilization
     let mut ii = 0;
     while ii < m {
         let i_end = (ii + TILE).min(m);

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
 use crate::error::{ComfyError, ComfyResult};
 use crate::workflow::{InputValue, Workflow};

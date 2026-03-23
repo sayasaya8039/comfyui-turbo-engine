@@ -6,8 +6,6 @@
 
 use comfy_core::{ComfyError, ComfyResult, Tensor};
 
-use crate::kernels;
-
 // ---------------------------------------------------------------------------
 // Fused LayerNorm + SiLU
 // ---------------------------------------------------------------------------
@@ -244,6 +242,7 @@ pub fn fused_gemm_gelu(a: &Tensor, b: &Tensor) -> ComfyResult<Tensor> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::kernels;
 
     #[test]
     fn test_fused_layer_norm_silu_shape_preserved() {

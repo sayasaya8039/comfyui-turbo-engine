@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::sync::RwLock;
 
 use crate::node::NodeOutputs;
 
@@ -67,6 +68,54 @@ impl TensorCache {
     /// Whether the cache is empty.
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
+    }
+}
+
+/// Thread-safe wrapper around [`TensorCache`] for concurrent access.
+///
+/// Uses a [`RwLock`] internally so multiple readers can coexist.
+/// All mutating operations (`get` promotes LRU, `put`, `clear`) acquire
+/// a write lock.
+pub struct ConcurrentTensorCache {
+    inner: RwLock<TensorCache>,
+}
+
+impl ConcurrentTensorCache {
+    /// Create a new concurrent cache with the given capacity.
+    pub fn new(max_entries: usize) -> Self {
+        Self {
+            inner: RwLock::new(TensorCache::new(max_entries)),
+        }
+    }
+
+    /// Get a cached entry (acquires write lock to promote LRU order).
+    pub fn get(&self, key: &str) -> Option<NodeOutputs> {
+        let mut cache = self.inner.write().ok()?;
+        cache.get(key).cloned()
+    }
+
+    /// Insert an entry.
+    pub fn put(&self, key: impl Into<String>, value: NodeOutputs) {
+        if let Ok(mut cache) = self.inner.write() {
+            cache.put(key, value);
+        }
+    }
+
+    /// Clear all entries.
+    pub fn clear(&self) {
+        if let Ok(mut cache) = self.inner.write() {
+            cache.clear();
+        }
+    }
+
+    /// Number of entries.
+    pub fn len(&self) -> usize {
+        self.inner.read().map(|c| c.len()).unwrap_or(0)
+    }
+
+    /// Whether the cache is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 

@@ -144,6 +144,64 @@ impl Tensor {
         &self.data
     }
 
+    /// Element-wise add: self + other (rayon-parallel for large tensors).
+    pub fn add(&self, other: &Tensor) -> ComfyResult<Self> {
+        if self.shape() != other.shape() {
+            return Err(ComfyError::TensorError(format!(
+                "add shape mismatch: {:?} vs {:?}",
+                self.shape(),
+                other.shape()
+            )));
+        }
+        let a = self.as_slice_f32()?;
+        let b = other.as_slice_f32()?;
+        let result: Vec<f32> = if a.len() > 4096 {
+            use rayon::prelude::*;
+            a.par_iter()
+                .zip(b.par_iter())
+                .map(|(&x, &y)| x + y)
+                .collect()
+        } else {
+            a.iter().zip(b.iter()).map(|(&x, &y)| x + y).collect()
+        };
+        Tensor::from_vec_f32(result, self.shape().to_vec())
+    }
+
+    /// Element-wise multiply: self * other (rayon-parallel for large tensors).
+    pub fn mul(&self, other: &Tensor) -> ComfyResult<Self> {
+        if self.shape() != other.shape() {
+            return Err(ComfyError::TensorError(format!(
+                "mul shape mismatch: {:?} vs {:?}",
+                self.shape(),
+                other.shape()
+            )));
+        }
+        let a = self.as_slice_f32()?;
+        let b = other.as_slice_f32()?;
+        let result: Vec<f32> = if a.len() > 4096 {
+            use rayon::prelude::*;
+            a.par_iter()
+                .zip(b.par_iter())
+                .map(|(&x, &y)| x * y)
+                .collect()
+        } else {
+            a.iter().zip(b.iter()).map(|(&x, &y)| x * y).collect()
+        };
+        Tensor::from_vec_f32(result, self.shape().to_vec())
+    }
+
+    /// Scalar multiply: self * scalar (rayon-parallel for large tensors).
+    pub fn scale(&self, scalar: f32) -> ComfyResult<Self> {
+        let data = self.as_slice_f32()?;
+        let result: Vec<f32> = if data.len() > 4096 {
+            use rayon::prelude::*;
+            data.par_iter().map(|&x| x * scalar).collect()
+        } else {
+            data.iter().map(|&x| x * scalar).collect()
+        };
+        Tensor::from_vec_f32(result, self.shape().to_vec())
+    }
+
     /// Interpret the tensor data as a slice of f32 values.
     /// Returns an error if the dtype is not F32.
     pub fn as_slice_f32(&self) -> ComfyResult<&[f32]> {
@@ -301,5 +359,103 @@ mod tests {
         let cloned = tensor.clone();
         // Arc means same backing data
         assert_eq!(tensor.as_bytes().as_ptr(), cloned.as_bytes().as_ptr());
+    }
+
+    // -- add / mul / scale tests --
+
+    #[test]
+    fn test_tensor_add_small() {
+        let a = Tensor::from_vec_f32(vec![1.0, 2.0, 3.0], vec![3]).unwrap();
+        let b = Tensor::from_vec_f32(vec![4.0, 5.0, 6.0], vec![3]).unwrap();
+        let c = a.add(&b).unwrap();
+        assert_eq!(c.shape(), &[3]);
+        let data = c.as_slice_f32().unwrap();
+        assert_eq!(data, &[5.0, 7.0, 9.0]);
+    }
+
+    #[test]
+    fn test_tensor_add_large_parallel() {
+        let n = 8192;
+        let a = Tensor::from_vec_f32(vec![1.0; n], vec![n]).unwrap();
+        let b = Tensor::from_vec_f32(vec![2.0; n], vec![n]).unwrap();
+        let c = a.add(&b).unwrap();
+        let data = c.as_slice_f32().unwrap();
+        for &v in data {
+            assert!((v - 3.0).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_tensor_add_shape_mismatch() {
+        let a = Tensor::from_vec_f32(vec![1.0, 2.0], vec![2]).unwrap();
+        let b = Tensor::from_vec_f32(vec![1.0, 2.0, 3.0], vec![3]).unwrap();
+        assert!(a.add(&b).is_err());
+    }
+
+    #[test]
+    fn test_tensor_mul_small() {
+        let a = Tensor::from_vec_f32(vec![2.0, 3.0, 4.0], vec![3]).unwrap();
+        let b = Tensor::from_vec_f32(vec![5.0, 6.0, 7.0], vec![3]).unwrap();
+        let c = a.mul(&b).unwrap();
+        let data = c.as_slice_f32().unwrap();
+        assert_eq!(data, &[10.0, 18.0, 28.0]);
+    }
+
+    #[test]
+    fn test_tensor_mul_large_parallel() {
+        let n = 8192;
+        let a = Tensor::from_vec_f32(vec![3.0; n], vec![n]).unwrap();
+        let b = Tensor::from_vec_f32(vec![4.0; n], vec![n]).unwrap();
+        let c = a.mul(&b).unwrap();
+        let data = c.as_slice_f32().unwrap();
+        for &v in data {
+            assert!((v - 12.0).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_tensor_mul_shape_mismatch() {
+        let a = Tensor::from_vec_f32(vec![1.0, 2.0], vec![2]).unwrap();
+        let b = Tensor::from_vec_f32(vec![1.0, 2.0, 3.0], vec![3]).unwrap();
+        assert!(a.mul(&b).is_err());
+    }
+
+    #[test]
+    fn test_tensor_scale_small() {
+        let a = Tensor::from_vec_f32(vec![1.0, 2.0, 3.0], vec![3]).unwrap();
+        let c = a.scale(2.5).unwrap();
+        let data = c.as_slice_f32().unwrap();
+        assert!((data[0] - 2.5).abs() < 1e-6);
+        assert!((data[1] - 5.0).abs() < 1e-6);
+        assert!((data[2] - 7.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_tensor_scale_large_parallel() {
+        let n = 8192;
+        let a = Tensor::from_vec_f32(vec![2.0; n], vec![n]).unwrap();
+        let c = a.scale(3.0).unwrap();
+        let data = c.as_slice_f32().unwrap();
+        for &v in data {
+            assert!((v - 6.0).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_tensor_scale_zero() {
+        let a = Tensor::from_vec_f32(vec![5.0, 10.0], vec![2]).unwrap();
+        let c = a.scale(0.0).unwrap();
+        let data = c.as_slice_f32().unwrap();
+        assert_eq!(data, &[0.0, 0.0]);
+    }
+
+    #[test]
+    fn test_tensor_add_2d() {
+        let a = Tensor::from_vec_f32(vec![1.0, 2.0, 3.0, 4.0], vec![2, 2]).unwrap();
+        let b = Tensor::from_vec_f32(vec![10.0, 20.0, 30.0, 40.0], vec![2, 2]).unwrap();
+        let c = a.add(&b).unwrap();
+        assert_eq!(c.shape(), &[2, 2]);
+        let data = c.as_slice_f32().unwrap();
+        assert_eq!(data, &[11.0, 22.0, 33.0, 44.0]);
     }
 }

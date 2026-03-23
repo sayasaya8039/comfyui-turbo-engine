@@ -13,6 +13,8 @@ pub struct SandboxConfig {
     pub max_memory_bytes: u64,
     /// Maximum wall-clock execution time per invocation (milliseconds).
     pub max_time_ms: u64,
+    /// Optional timeout in seconds (takes precedence over `max_time_ms` when set).
+    pub timeout_seconds: Option<u64>,
     /// Directories the plugin is allowed to *read* from.
     pub allowed_read_paths: Vec<PathBuf>,
     /// Directories the plugin is allowed to *write* to.
@@ -28,6 +30,7 @@ impl Default for SandboxConfig {
         Self {
             max_memory_bytes: 64 * 1024 * 1024, // 64 MiB
             max_time_ms: 5_000,                  // 5 seconds
+            timeout_seconds: None,
             allowed_read_paths: Vec::new(),
             allowed_write_paths: Vec::new(),
             allow_network: false,
@@ -43,6 +46,7 @@ impl SandboxConfig {
         Self {
             max_memory_bytes: 1024 * 1024 * 1024, // 1 GiB
             max_time_ms: 60_000,                   // 60 seconds
+            timeout_seconds: Some(60),
             allowed_read_paths: vec![PathBuf::from(".")],
             allowed_write_paths: vec![PathBuf::from(".")],
             allow_network: true,

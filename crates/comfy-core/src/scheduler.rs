@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::dag::Dag;
 use crate::device::Device;
@@ -55,14 +55,14 @@ impl DeviceScheduler {
             depth_groups[d].push(node_id.clone());
         }
 
-        let mut all_outputs: HashMap<String, NodeOutputs> = HashMap::new();
-        let mut stats = SchedulerStats::default();
+        let all_outputs = Arc::new(Mutex::new(HashMap::<String, NodeOutputs>::new()));
+        let stats = Arc::new(Mutex::new(SchedulerStats::default()));
 
-        // Execute each depth group
+        // Execute each depth group (groups are sequential; nodes within a group are parallel)
         for group in &depth_groups {
-            // For now, iterate sequentially within a group.
-            // (Parallel execution via rayon can be added when real GPU tasks exist.)
-            for node_id in group {
+            if group.len() == 1 {
+                // Single node — execute directly without rayon overhead
+                let node_id = &group[0];
                 let workflow_node = workflow.nodes.get(node_id).ok_or_else(|| {
                     ComfyError::NodeNotFound(node_id.clone())
                 })?;
@@ -76,19 +76,25 @@ impl DeviceScheduler {
                     })?;
 
                 // Track device hint
-                let device = node_impl.device_hint();
-                stats.total_nodes += 1;
-                match device {
-                    Device::Gpu(_) => stats.gpu_nodes += 1,
-                    Device::Npu(_) => stats.npu_nodes += 1,
-                    Device::Cpu => stats.cpu_nodes += 1,
+                {
+                    let device = node_impl.device_hint();
+                    let mut s = stats.lock().unwrap();
+                    s.total_nodes += 1;
+                    match device {
+                        Device::Gpu(_) => s.gpu_nodes += 1,
+                        Device::Npu(_) => s.npu_nodes += 1,
+                        Device::Cpu => s.cpu_nodes += 1,
+                    }
                 }
 
                 // Build inputs
                 let mut inputs = NodeInputs::new();
-                for (input_name, input_val) in &workflow_node.inputs {
-                    let resolved = Self::resolve_input(input_val, &all_outputs)?;
-                    inputs.set(input_name.clone(), resolved);
+                {
+                    let outputs_guard = all_outputs.lock().unwrap();
+                    for (input_name, input_val) in &workflow_node.inputs {
+                        let resolved = Self::resolve_input(input_val, &outputs_guard)?;
+                        inputs.set(input_name.clone(), resolved);
+                    }
                 }
 
                 // Execute
@@ -99,16 +105,101 @@ impl DeviceScheduler {
                     }
                 })?;
 
-                all_outputs.insert(node_id.clone(), outputs);
+                all_outputs.lock().unwrap().insert(node_id.clone(), outputs);
+            } else {
+                // Multiple independent nodes — execute in parallel via rayon
+                let errors: Mutex<Vec<ComfyError>> = Mutex::new(Vec::new());
+
+                rayon::scope(|s| {
+                    for node_id in group {
+                        let all_outputs = &all_outputs;
+                        let stats = &stats;
+                        let errors = &errors;
+                        let workflow = &workflow;
+                        let registry = &self.registry;
+
+                        s.spawn(move |_| {
+                            let execute_one = || -> ComfyResult<()> {
+                                let workflow_node =
+                                    workflow.nodes.get(node_id).ok_or_else(|| {
+                                        ComfyError::NodeNotFound(node_id.clone())
+                                    })?;
+
+                                let node_impl = registry
+                                    .create(&workflow_node.class_type)
+                                    .ok_or_else(|| {
+                                        ComfyError::NodeNotFound(format!(
+                                            "class_type '{}' not registered",
+                                            workflow_node.class_type
+                                        ))
+                                    })?;
+
+                                // Track device hint
+                                {
+                                    let device = node_impl.device_hint();
+                                    let mut st = stats.lock().unwrap();
+                                    st.total_nodes += 1;
+                                    match device {
+                                        Device::Gpu(_) => st.gpu_nodes += 1,
+                                        Device::Npu(_) => st.npu_nodes += 1,
+                                        Device::Cpu => st.cpu_nodes += 1,
+                                    }
+                                }
+
+                                // Build inputs (lock outputs only for input resolution)
+                                let mut inputs = NodeInputs::new();
+                                {
+                                    let outputs_guard = all_outputs.lock().unwrap();
+                                    for (input_name, input_val) in &workflow_node.inputs {
+                                        let resolved =
+                                            Self::resolve_input(input_val, &outputs_guard)?;
+                                        inputs.set(input_name.clone(), resolved);
+                                    }
+                                }
+
+                                // Execute (no lock held)
+                                let outputs = node_impl.execute(&inputs).map_err(|e| {
+                                    ComfyError::ExecutionError {
+                                        node: node_id.clone(),
+                                        message: e.to_string(),
+                                    }
+                                })?;
+
+                                all_outputs.lock().unwrap().insert(node_id.clone(), outputs);
+                                Ok(())
+                            };
+
+                            if let Err(e) = execute_one() {
+                                errors.lock().unwrap().push(e);
+                            }
+                        });
+                    }
+                });
+
+                // Check for errors collected during parallel execution
+                let collected_errors = errors.into_inner().unwrap();
+                if let Some(first_error) = collected_errors.into_iter().next() {
+                    return Err(first_error);
+                }
             }
         }
 
-        // Store stats
+        let final_outputs = Arc::try_unwrap(all_outputs)
+            .unwrap_or_else(|arc| {
+                let guard = arc.lock().unwrap();
+                Mutex::new(guard.clone())
+            })
+            .into_inner()
+            .unwrap();
+
         if let Ok(mut s) = self.stats.lock() {
-            *s = stats;
+            *s = Arc::try_unwrap(stats)
+                .unwrap_or_else(|_| Mutex::new(SchedulerStats::default()))
+                .into_inner()
+                .unwrap();
         }
 
-        Ok(all_outputs)
+        Ok(final_outputs)
     }
 
     /// Get a snapshot of the latest execution stats.

@@ -11,4 +11,5 @@ fallback = ["image"]
 [dependencies]
 comfy-core = { path = "../comfy-core" }
 image = { version = "0.25", optional = true }
+rayon = "1"
 tracing = { workspace = true }
