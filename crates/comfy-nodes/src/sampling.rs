@@ -48,8 +48,9 @@ impl Node for KSampler {
 
         // Stub denoise: real model inference comes in Phase 4
         let result = comfy_julia::sample(sampler, &latent, &sigmas, |x, _sigma| {
-            let data: Vec<f32> = x.as_slice_f32()?.iter().map(|v| v * 0.95).collect();
-            Tensor::from_vec_f32(data, x.shape().to_vec())
+            let data = x.as_slice_f32()?;
+            let scaled: Vec<f32> = data.iter().map(|v| v * 0.95).collect();
+            Tensor::from_vec_f32_fast(scaled, x.shape().to_vec())
         })?;
 
         let mut outputs = NodeOutputs::new();

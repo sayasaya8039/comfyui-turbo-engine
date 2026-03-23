@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
@@ -32,7 +33,7 @@ pub enum NodeValue {
     Int(i64),
     String(String),
     Bool(bool),
-    List(Vec<NodeValue>),
+    List(Arc<Vec<NodeValue>>),
     None,
 }
 
@@ -240,7 +241,7 @@ mod tests {
             (NodeValue::String("hello".to_string()), "String"),
             (NodeValue::Bool(true), "Bool"),
             (NodeValue::None, "None"),
-            (NodeValue::List(vec![NodeValue::Int(1)]), "List"),
+            (NodeValue::List(Arc::new(vec![NodeValue::Int(1)])), "List"),
         ];
         for (val, expected_name) in values {
             assert_eq!(val.type_name(), expected_name);

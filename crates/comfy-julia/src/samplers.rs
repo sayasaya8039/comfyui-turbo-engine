@@ -147,14 +147,14 @@ where
         let sigma = sigmas[i] as f32;
         let sigma_next = sigmas[i + 1] as f32;
 
-        let current_tensor = Tensor::from_vec_f32(current.clone(), shape.clone())?;
+        let current_tensor = Tensor::from_vec_f32_fast(current.clone(), shape.clone())?;
         let denoised = denoise_fn(&current_tensor, sigmas[i])?;
         let denoised_slice = denoised.as_slice_f32()?;
 
         current = fallback::ddim_step(&current, denoised_slice, sigma, sigma_next, eta);
     }
 
-    Tensor::from_vec_f32(current, shape)
+    Tensor::from_vec_f32_fast(current, shape)
 }
 
 #[cfg(test)]

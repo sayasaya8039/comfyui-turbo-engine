@@ -262,13 +262,13 @@ impl PipelineExecutor {
         comfy_julia::sample(sampler, &noise, &sigmas, |x, _sigma| {
             // Stub denoise — real implementation would call ONNX UNet session
             let data = x.as_slice_f32()?;
-            let result: Vec<f32> = if data.len() > 4096 {
+            let result: Vec<f32> = if data.len() > 65536 {
                 use rayon::prelude::*;
                 data.par_iter().map(|v| v * 0.95).collect()
             } else {
                 data.iter().map(|v| v * 0.95).collect()
             };
-            Tensor::from_vec_f32(result, x.shape().to_vec())
+            Tensor::from_vec_f32_fast(result, x.shape().to_vec())
         })
     }
 
